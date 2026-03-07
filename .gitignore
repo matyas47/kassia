@@ -1,0 +1,30 @@
+
+---
+
+# .gitignore
+
+```gitignore
+# OS
+.DS_Store
+Thumbs.db
+
+# editors
+*.swp
+*.swo
+*~
+
+# temporary SuperCollider files
+*.scd.bak
+*.sc.bak
+
+# logs
+*.log
+
+# build artifacts
+*.o
+*.so
+*.dylib
+
+# misc
+.idea/
+.vscode/
