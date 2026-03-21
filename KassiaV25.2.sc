@@ -62,8 +62,10 @@ amCol = Color.grey(0.80);
 fmCol = Color.grey(0.80);
 
 sb = Window.screenBounds;
-winW = min(1760, sb.width - 40);
-winH = min(760, sb.height - 80);
+// Guard against Qt reporting portrait dimensions on a landscape monitor
+// (e.g. a disconnected or rotated secondary display)
+winW = min(1760, sb.width.max(sb.height) - 40);
+winH = min(760,  sb.width.min(sb.height) - 80);
 
 w = Window("Kassia", Rect(20, 20, winW, winH)).front;
 w.background_(dark);
