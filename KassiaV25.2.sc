@@ -5,6 +5,7 @@
 // - dynamic spectrum width
 // - tighter ratio-morph control layout
 // - renamed morph stop button to "Stop morph"
+// - vowelRQ slider updated to bandwidth multiplier range (0.5–3.0)
 //
 // Requires:
 // Drone8Synth_vowelSmooth_v3.sc (installed as Drone8Synth.sc or compatible)
@@ -398,11 +399,12 @@ vowelPosSl = Slider(top, Rect(510, 84, 120, 16))
 	.background_(amCol)
 	.action_({ |sl| ~dr.node.set(\vowelPos, sl.value * 4); });
 
+// vRQ is now a bandwidth multiplier: 1.0 = natural, >1 = wider, <1 = tighter
 StaticText(top, Rect(650, 82, 70, 20)).string_("vRQ").stringColor_(txtCol).font_(uiFont);
 vowelRQSl = Slider(top, Rect(685, 84, 120, 16))
-	.value_(0.22.linlin(0.05, 0.45, 0, 1))
+	.value_(1.0.linlin(0.5, 3.0, 0, 1))
 	.background_(amCol)
-	.action_({ |sl| ~dr.node.set(\vowelRQ, sl.value.linlin(0, 1, 0.05, 0.45)); });
+	.action_({ |sl| ~dr.node.set(\vowelRQ, sl.value.linlin(0, 1, 0.5, 3.0)); });
 
 StaticText(top, Rect(825, 82, 54, 20)).string_("fModHz").stringColor_(txtCol).font_(uiFont);
 filterModRateSl = Slider(top, Rect(875, 84, 120, 16))
