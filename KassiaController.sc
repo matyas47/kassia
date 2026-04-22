@@ -78,6 +78,13 @@ KassiaController {
 		this.notify(\partials, model.absFreqs, model.amps);
 	}
 
+	setTilt { |t|
+		model.setTilt(t);
+		this.prPushPartials;
+		this.notify(\tilt,     model.tilt);
+		this.notify(\partials, model.absFreqs, model.amps);
+	}
+
 	// Recompute and push partials without changing parameters.
 	// Useful for init and after preset load.
 	refreshPartials {
@@ -85,6 +92,7 @@ KassiaController {
 		this.notify(\carrier,  model.carrier);
 		this.notify(\ratio,    model.ratio);
 		this.notify(\index,    model.index);
+		this.notify(\tilt,     model.tilt);
 		this.notify(\modHz,    model.modHz);
 		this.notify(\partials, model.absFreqs, model.amps);
 	}

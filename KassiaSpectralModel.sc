@@ -1,10 +1,10 @@
 // KassiaSpectralModel.sc
-// Spectral model for Kassia.
+// Spectral model for Kassia and Kaija.
 // Pure logic — no server, no GUI.
 // Computes FM-derived partial frequencies and amplitudes
-// from carrier, ratio, and index parameters.
+// from carrier, ratio, index, and tilt parameters.
 //
-// Amplitudes are normalised to 0–1.
+// Amplitudes are normalised to 0–1 after tilt is applied.
 // Scaling to synth gain levels is the render engine's responsibility.
 
 KassiaSpectralModel {
@@ -13,22 +13,22 @@ KassiaSpectralModel {
     var <>ratio;        // FM modulator ratio
     var <>index;        // FM index
     var <>numPartials;  // number of partials to use
-    var <>tilt;         // spectral tilt factor (future — 0.0 = no tilt)
+    var <>tilt;         // spectral tilt: 0.0 = neutral, >0 = brighter, <0 = darker
     var <>density;      // partial density/pruning threshold (future — 0.0 = all partials)
 
     var <freqs;         // computed partial frequencies, as ratios relative to carrier
     var <amps;          // computed partial amplitudes, normalised 0–1
 
-    *new { |carrier=55, ratio=1.0, index=3.0, numPartials=8|
-        ^super.new.init(carrier, ratio, index, numPartials)
+    *new { |carrier=55, ratio=1.0, index=3.0, numPartials=8, tilt=0.0|
+        ^super.new.init(carrier, ratio, index, numPartials, tilt)
     }
 
-    init { |c, r, i, n|
+    init { |c, r, i, n, t|
         carrier     = c.asFloat;
         ratio       = r.asFloat.clip(0.125, 8.0);
         index       = i.asFloat.clip(0.0, 10.0);
         numPartials = n.asInteger.max(1);
-        tilt        = 0.0;
+        tilt        = t.asFloat.clip(-1.0, 1.0);
         density     = 0.0;
         freqs       = Array.newClear(numPartials);
         amps        = Array.newClear(numPartials);
@@ -43,20 +43,27 @@ KassiaSpectralModel {
         carrier = carrier.max(0.1);
         ratio   = ratio.clip(0.125, 8.0);
         index   = index.clip(0.0, 10.0);
+        tilt    = tilt.clip(-1.0, 1.0);
 
         obj      = FMRatioPartials.new(carrier, ratio, index, 200);
         rawFreqs = obj.freqs.asArray.collect(_.asFloat).copyRange(0, numPartials - 1);
         rawAmps  = obj.amps.asArray.collect({ |a| a.asFloat.abs }).copyRange(0, numPartials - 1);
 
-        // Normalise amplitudes to 0–1
-        mx      = rawAmps.maxItem.max(1e-12);
-        rawAmps = rawAmps / mx;
-
-        // Future hook: tilt
-        // rawAmps = this.applyTilt(rawAmps, rawFreqs);
+        // Apply spectral tilt as a power law across partial index.
+        // Each partial is weighted by (partialNumber ** tilt), shifting
+        // the spectral centroid up (tilt > 0) or down (tilt < 0).
+        if(tilt != 0.0) {
+            rawAmps = rawAmps.collect({ |a, i|
+                a * ((i + 1).asFloat ** tilt)
+            });
+        };
 
         // Future hook: density/pruning
         // rawAmps = this.applyDensity(rawAmps);
+
+        // Normalise amplitudes to 0–1 after tilt
+        mx      = rawAmps.maxItem.max(1e-12);
+        rawAmps = rawAmps / mx;
 
         // Store frequencies as ratios relative to carrier
         freqs = rawFreqs.collect({ |f| (f / carrier).asFloat });
@@ -76,6 +83,11 @@ KassiaSpectralModel {
 
     setIndex { |i|
         index = i.asFloat.clip(0.0, 10.0);
+        this.compute;
+    }
+
+    setTilt { |t|
+        tilt = t.asFloat.clip(-1.0, 1.0);
         this.compute;
     }
 

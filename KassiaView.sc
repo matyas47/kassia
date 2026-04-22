@@ -59,44 +59,46 @@ KassiaView {
 	prRegisterListeners {
 
 		ctrl.addListener(\carrier, { |hz|
-			if(carrierNb.notNil)      { carrierNb.value = hz };
-			if(carrierPitchTxt.notNil) {
-				carrierPitchTxt.string = PitchView.hzToPitchString(hz, 0.1)
-			};
+			{ if(carrierNb.notNil)       { carrierNb.value = hz };
+			  if(carrierPitchTxt.notNil) { carrierPitchTxt.string = PitchView.hzToPitchString(hz, 0.1) };
+			}.defer;
 		});
 
 		ctrl.addListener(\ratio, { |r|
-			if(ratioNb.notNil) { ratioNb.value = r.round(0.001) };
-			if(ratioSl.notNil) { ratioSl.value = r.explin(0.125, 8.0, 0, 1) };
+			{ if(ratioNb.notNil) { ratioNb.value = r.round(0.001) };
+			  if(ratioSl.notNil) { ratioSl.value = r.explin(0.125, 8.0, 0, 1) };
+			}.defer;
 		});
 
 		ctrl.addListener(\index, { |i|
-			if(indexNb.notNil) { indexNb.value = i.round(0.001) };
-			if(indexSl.notNil) { indexSl.value = i.linlin(0.0, 10.0, 0, 1) };
+			{ if(indexNb.notNil) { indexNb.value = i.round(0.001) };
+			  if(indexSl.notNil) { indexSl.value = i.linlin(0.0, 10.0, 0, 1) };
+			}.defer;
 		});
 
 		ctrl.addListener(\modHz, { |hz|
-			if(modHzNb.notNil)   { modHzNb.value = hz.round(0.001) };
-			if(modPitchTxt.notNil) {
-				modPitchTxt.string = PitchView.hzToPitchString(hz, 0.1)
-			};
+			{ if(modHzNb.notNil)    { modHzNb.value = hz.round(0.001) };
+			  if(modPitchTxt.notNil) { modPitchTxt.string = PitchView.hzToPitchString(hz, 0.1) };
+			}.defer;
 		});
 
 		ctrl.addListener(\partials, { |absFreqs, amps|
-			ctrl.synth.num.do { |i|
-				if(freqNb.notNil and: { freqNb[i].notNil }) {
-					freqNb[i].value = absFreqs[i].round(0.001);
+			{
+				ctrl.synth.num.do { |i|
+					if(freqNb.notNil and: { freqNb[i].notNil }) {
+						freqNb[i].value = absFreqs[i].round(0.001);
+					};
+					if(freqPitchTxt.notNil and: { freqPitchTxt[i].notNil }) {
+						freqPitchTxt[i].string = PitchView.hzToPitchString(absFreqs[i], 0.1);
+					};
+					if(levelSl.notNil and: { levelSl[i].notNil }) {
+						levelSl[i].value = amps[i];
+					};
+					if(levelNb.notNil and: { levelNb[i].notNil }) {
+						levelNb[i].value = amps[i].round(0.001);
+					};
 				};
-				if(freqPitchTxt.notNil and: { freqPitchTxt[i].notNil }) {
-					freqPitchTxt[i].string = PitchView.hzToPitchString(absFreqs[i], 0.1);
-				};
-				if(levelSl.notNil and: { levelSl[i].notNil }) {
-					levelSl[i].value = amps[i];
-				};
-				if(levelNb.notNil and: { levelNb[i].notNil }) {
-					levelNb[i].value = amps[i].round(0.001);
-				};
-			};
+			}.defer;
 		});
 	}
 
@@ -203,11 +205,13 @@ KassiaView {
 		);
 
 		Button(top, Rect(1048, 8, 100, 22))
-			.states_([["Rand phases", nil, nil, Font("Sans", 8)]])
+			.states_([["Rand phases"]])
+			.font_(Font("Liberation Sans", 10))
 			.action_({ ctrl.randomisePhases });
 
 		Button(top, Rect(1152, 8, 100, 22))
-			.states_([["Init levels", nil, nil, Font("Sans", 8)]])
+			.states_([["Init levels"]])
+			.font_(Font("Liberation Sans", 10))
 			.action_({ ctrl.initLevels });
 
 		// Row 2 — mod ratio, mod Hz, index, init levels, morph controls
@@ -254,7 +258,7 @@ KassiaView {
 			.value_(ctrl.model.index)
 			.action_({ |nb| ctrl.setIndex(nb.value) });
 
-		// morph controls — shifted left now that Init levels moved to row 1
+		// morph controls
 		StaticText(top, Rect(850, 48, 42, 20))
 			.string_("target").stringColor_(txtCol).font_(uiFont);
 		ratioTargetNb = NumberBox(top, Rect(893, 46, 60, 22))
@@ -269,11 +273,13 @@ KassiaView {
 			.string_("s").stringColor_(txtCol).font_(uiFont);
 
 		Button(top, Rect(1059, 46, 54, 22))
-			.states_([["Morph", nil, nil, Font("Sans", 8)]])
+			.states_([["Morph"]])
+			.font_(Font("Liberation Sans", 10))
 			.action_({ ctrl.morphRatioTo(ratioTargetNb.value, ratioTimeNb.value) });
 
-		Button(top, Rect(1118, 46, 96, 22))
-			.states_([["Stop morph", nil, nil, Font("Sans", 8)]])
+		Button(top, Rect(1118, 46, 80, 22))
+			.states_([["Stop morph"]])
+			.font_(Font("Liberation Sans", 10))
 			.action_({ ctrl.stopMorph });
 
 		// Row 3 — drive, vowels, filter modulation
@@ -317,8 +323,8 @@ KassiaView {
 		StaticText(top, Rect(825, 82, 54, 20))
 			.string_("fModHz").stringColor_(txtCol).font_(uiFont);
 		this.prMakeSliderNb(top,
-			slRect: Rect(875, 84, 120, 16),
-			nbRect: Rect(1000, 80, 62, 22),
+			slRect: Rect(875, 84, 100, 16),
+			nbRect: Rect(978, 80, 58, 22),
 			initVal: 0.03,
 			bg: panCol,
 			toSlider: { |v| v.explin(0.0001, 2.0, 0, 1) },
@@ -326,11 +332,11 @@ KassiaView {
 			action: { |v| ctrl.set(\filterModRate, v) }
 		);
 
-		StaticText(top, Rect(1018, 82, 54, 20))
+		StaticText(top, Rect(1040, 82, 50, 20))
 			.string_("fModDp").stringColor_(txtCol).font_(uiFont);
 		this.prMakeSliderNb(top,
-			slRect: Rect(1072, 84, 80, 16),
-			nbRect: Rect(1156, 80, 56, 22),
+			slRect: Rect(1090, 84, 80, 16),
+			nbRect: Rect(1174, 80, 56, 22),
 			initVal: 0.0,
 			bg: panCol,
 			toSlider: { |v| v },
