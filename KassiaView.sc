@@ -15,6 +15,7 @@ KassiaView {
 	var win;          // Window
 
 	var top, mid;     // CompositeViews
+	var presetRow;    // CompositeView for preset controls
 	var scope;        // FreqScopeView
 
 	// Top bar widgets (retained for listener callbacks)
@@ -22,6 +23,9 @@ KassiaView {
 	var modHzNb, modPitchTxt;
 	var ratioNb, ratioSl;
 	var indexNb, indexSl;
+
+	// Preset widgets
+	var presetMenu, presetNameField;
 
 	// Per-partial strip widget arrays (rebuilt on each buildUI)
 	var freqNb, freqPitchTxt;
@@ -37,7 +41,7 @@ KassiaView {
 		ctrl = c;
 		win  = w;
 
-		uiFont = Font("Sans", 10);
+		uiFont = KassiaPlatform.uiFont(10);
 		dark   = Color.grey(0.92);
 		stripBg = Color.grey(0.82);
 		txtCol  = Color.black;
@@ -100,6 +104,19 @@ KassiaView {
 				};
 			}.defer;
 		});
+
+		ctrl.addListener(\presets, { |names|
+			{ if(presetMenu.notNil) {
+				presetMenu.items_(["— presets —", "Load file..."] ++ names);
+			}}.defer;
+		});
+
+		ctrl.addListener(\presetLoaded, { |name|
+			{ if(presetMenu.notNil) {
+				var idx = (["— presets —", "Load file..."] ++ ctrl.presetBank.names).indexOf(name) ?? { 0 };
+				presetMenu.value_(idx);
+			}}.defer;
+		});
 	}
 
 	// ------------------------------------------------------------------
@@ -112,14 +129,16 @@ KassiaView {
 		var winW, winH, startX, stripW;
 
 		// Tear down existing views
-		if(top.notNil) { top.remove; top = nil };
-		if(mid.notNil)  { mid.remove;  mid = nil };
+		if(top.notNil)       { top.remove;       top = nil };
+		if(presetRow.notNil) { presetRow.remove;  presetRow = nil };
+		if(mid.notNil)       { mid.remove;        mid = nil };
 
 		// Nil out widget refs so listener guards work correctly
 		carrierNb = nil; carrierPitchTxt = nil;
 		modHzNb = nil; modPitchTxt = nil;
 		ratioNb = nil; ratioSl = nil;
 		indexNb = nil; indexSl = nil;
+		presetMenu = nil; presetNameField = nil;
 		freqNb       = Array.newClear(ctrl.synth.num);
 		freqPitchTxt = Array.newClear(ctrl.synth.num);
 		levelSl      = Array.newClear(ctrl.synth.num);
@@ -130,13 +149,17 @@ KassiaView {
 
 		win.background_(dark);
 
-		top = CompositeView(win, Rect(0, 0, winW, 250));
+		top = CompositeView(win, Rect(0, 0, winW, 120));
 		top.background_(dark);
 
-		mid = CompositeView(win, Rect(0, 250, winW, winH - 269));
+		presetRow = CompositeView(win, Rect(0, 120, winW, 24));
+		presetRow.background_(dark);
+
+		mid = CompositeView(win, Rect(0, 144, winW, winH - 163));
 		mid.background_(dark);
 
 		this.prBuildTopBar(winW);
+		this.prBuildPresetRow(winW);
 		this.prBuildSpectrum(winW);
 
 		startX = 8;
@@ -145,6 +168,91 @@ KassiaView {
 
 		// Restore all readouts from current controller/synth state
 		ctrl.refreshPartials;
+	}
+
+	// ------------------------------------------------------------------
+	// Preset row
+	// ------------------------------------------------------------------
+
+	prBuildPresetRow { |winW|
+		var btnFont;
+		btnFont = KassiaPlatform.btnFont(8);
+
+		presetMenu = PopUpMenu(presetRow, Rect(4, 3, 200, 18))
+			.items_(["— presets —", "Load file..."])
+			.font_(uiFont)
+			.action_({ |m|
+				if(m.value == 1) {
+					Dialog.openPanel(
+						okFunc: { |p| ctrl.readPresets(p) },
+						cancelFunc: { presetMenu.value_(0) },
+						path: KassiaPlatform.ensurePresetsDir("kassia")
+					);
+				} {
+					if(m.value > 1) {
+						var name = ctrl.presetBank.names[m.value - 2];
+						ctrl.loadPreset(name);
+					};
+				};
+			});
+
+		presetNameField = TextField(presetRow, Rect(210, 3, 140, 18))
+			.string_("preset name")
+			.font_(uiFont);
+
+		Button(presetRow, Rect(354, 3, 40, 18))
+			.states_([["Save"]])
+			.font_(btnFont)
+			.action_({
+				var name = presetNameField.string.stripWhiteSpace;
+				if(name.size > 0 and: { name != "preset name" }) {
+					ctrl.savePreset(name);
+				} {
+					presetNameField.string_("⚠ enter a name");
+				};
+			});
+
+		Button(presetRow, Rect(398, 3, 46, 18))
+			.states_([["Delete"]])
+			.font_(btnFont)
+			.action_({
+				if(presetMenu.value > 1) {
+					var name = ctrl.presetBank.names[presetMenu.value - 2];
+					ctrl.deletePreset(name);
+					presetMenu.value_(0);
+				};
+			});
+
+		Button(presetRow, Rect(448, 3, 56, 18))
+			.states_([["Save file"]])
+			.font_(btnFont)
+			.action_({
+				var name, path;
+				name = presetNameField.string.stripWhiteSpace;
+				if(name.size > 0 and: { name != "preset name" }) {
+					ctrl.savePreset(name);
+				};
+				if(ctrl.presetBank.size == 0) {
+					presetNameField.string_("⚠ enter a preset name first");
+				} {
+					if(ctrl.bankPath.notNil) {
+						if(ctrl.writePresets(ctrl.bankPath)) {
+							presetNameField.string_("✓ saved");
+						} {
+							presetNameField.string_("⚠ save failed");
+						};
+					} {
+						var saveName = if(name.size > 0 and: { name != "preset name" })
+							{ name } { "kassia_presets" };
+						path = KassiaPlatform.ensurePresetsDir("kassia") ++ "/" ++ saveName ++ ".json";
+						if(ctrl.writePresets(path)) {
+							presetNameField.string_("✓ saved: " ++ saveName);
+						} {
+							presetNameField.string_("⚠ save failed");
+						};
+					};
+				};
+			});
 	}
 
 	// ------------------------------------------------------------------
@@ -206,12 +314,12 @@ KassiaView {
 
 		Button(top, Rect(1048, 8, 100, 22))
 			.states_([["Rand phases"]])
-			.font_(Font("Liberation Sans", 10))
+			.font_(KassiaPlatform.btnFont(7))
 			.action_({ ctrl.randomisePhases });
 
 		Button(top, Rect(1152, 8, 100, 22))
 			.states_([["Init levels"]])
-			.font_(Font("Liberation Sans", 10))
+			.font_(KassiaPlatform.btnFont(7))
 			.action_({ ctrl.initLevels });
 
 		// Row 2 — mod ratio, mod Hz, index, init levels, morph controls
@@ -274,12 +382,12 @@ KassiaView {
 
 		Button(top, Rect(1059, 46, 54, 22))
 			.states_([["Morph"]])
-			.font_(Font("Liberation Sans", 10))
+			.font_(KassiaPlatform.btnFont(7))
 			.action_({ ctrl.morphRatioTo(ratioTargetNb.value, ratioTimeNb.value) });
 
 		Button(top, Rect(1118, 46, 80, 22))
 			.states_([["Stop morph"]])
-			.font_(Font("Liberation Sans", 10))
+			.font_(KassiaPlatform.btnFont(7))
 			.action_({ ctrl.stopMorph });
 
 		// Row 3 — drive, vowels, filter modulation

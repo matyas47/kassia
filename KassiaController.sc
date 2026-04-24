@@ -12,6 +12,8 @@ KassiaController {
 
 	var <model;       // KassiaSpectralModel
 	var <synth;       // KassiaSynth
+	var <presetBank;  // PresetBank
+	var <bankPath;    // current bank file path for auto-save
 	var listeners;    // Dictionary of Arrays of callbacks
 	var morphRoutine; // active ratio morph routine, or nil
 
@@ -20,9 +22,12 @@ KassiaController {
 	}
 
 	init { |m, s|
-		model     = m;
-		synth     = s;
-		listeners = Dictionary.new;
+		model      = m;
+		synth      = s;
+		listeners  = Dictionary.new;
+		presetBank = PresetBank.new;
+		bankPath   = nil;
+		presetBank.onChanged({ |names| this.notify(\presets, names) });
 		^this
 	}
 
@@ -178,6 +183,77 @@ KassiaController {
 	}
 
 	isMorphing { ^morphRoutine.notNil }
+
+	// ------------------------------------------------------------------
+	// Presets
+	// ------------------------------------------------------------------
+
+	savePreset { |name|
+		var snap;
+		snap = (
+			carrier:      model.carrier,
+			ratio:        model.ratio,
+			index:        model.index,
+			tilt:         model.tilt,
+			levels:       synth.getState(\levels).copy,
+			pans:         synth.getState(\pans).copy,
+			phase:        synth.getState(\phase).copy,
+			amRate:       synth.getState(\amRate).copy,
+			amDepth:      synth.getState(\amDepth).copy,
+			fmRate:       synth.getState(\fmRate).copy,
+			fmDepthCents: synth.getState(\fmDepthCents).copy
+		);
+		presetBank.save(name, snap);
+		if(bankPath.notNil) { presetBank.writeToFile(bankPath) };
+		this.notify(\presets, presetBank.names);
+	}
+
+	loadPreset { |name|
+		var snap;
+		snap = presetBank.load(name);
+		if(snap.isNil) { ("KassiaController: preset not found: " ++ name).warn; ^this };
+
+		model.setCarrier(snap[\carrier] ?? { model.carrier });
+		model.setRatio(snap[\ratio]     ?? { model.ratio });
+		model.setIndex(snap[\index]     ?? { model.index });
+		model.setTilt(snap[\tilt]       ?? { model.tilt });
+
+		if(snap[\levels].notNil)       { synth.setPartialParam(\levels,       snap[\levels]) };
+		if(snap[\pans].notNil)         { synth.setPartialParam(\pans,         snap[\pans]) };
+		if(snap[\phase].notNil)        { synth.setPartialParam(\phase,        snap[\phase]) };
+		if(snap[\amRate].notNil)       { synth.setPartialParam(\amRate,       snap[\amRate]) };
+		if(snap[\amDepth].notNil)      { synth.setPartialParam(\amDepth,      snap[\amDepth]) };
+		if(snap[\fmRate].notNil)       { synth.setPartialParam(\fmRate,       snap[\fmRate]) };
+		if(snap[\fmDepthCents].notNil) { synth.setPartialParam(\fmDepthCents, snap[\fmDepthCents]) };
+
+		synth.set(\root, model.carrier);
+		this.refreshPartials;
+		this.notify(\presetLoaded, name);
+	}
+
+	deletePreset { |name|
+		presetBank.delete(name);
+		if(bankPath.notNil) { presetBank.writeToFile(bankPath) };
+		this.notify(\presets, presetBank.names);
+	}
+
+	writePresets { |path|
+		bankPath = path;
+		^presetBank.writeToFile(path)
+	}
+
+	readPresets { |path|
+		var result;
+		result = presetBank.readFromFile(path);
+		if(result) {
+			bankPath = path;
+			this.notify(\presets, presetBank.names);
+			if(presetBank.size > 0) {
+				this.loadPreset(presetBank.names[0]);
+			};
+		};
+		^result
+	}
 
 	// ------------------------------------------------------------------
 	// Playback
