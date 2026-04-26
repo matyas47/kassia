@@ -50,7 +50,8 @@ KassiaController {
 	}
 
 	notify { |key ...args|
-		listeners[key].do({ |f| f.valueArray(args) });
+		var fns = listeners[key];
+		if(fns.notNil) { fns.do({ |f| f.valueArray(args) }) };
 	}
 
 	// ------------------------------------------------------------------
@@ -94,12 +95,9 @@ KassiaController {
 	// Useful for init and after preset load.
 	refreshPartials {
 		this.prPushPartials;
-		this.notify(\carrier,  model.carrier);
-		this.notify(\ratio,    model.ratio);
-		this.notify(\index,    model.index);
-		this.notify(\tilt,     model.tilt);
-		this.notify(\modHz,    model.modHz);
-		this.notify(\partials, model.absFreqs, model.amps);
+		this.notify(\refresh,
+			model.carrier, model.ratio, model.index, model.tilt,
+			model.modHz, model.absFreqs, model.amps);
 	}
 
 	// Reinitialise level sliders from FM amplitudes only
@@ -213,12 +211,14 @@ KassiaController {
 		snap = presetBank.load(name);
 		if(snap.isNil) { ("KassiaController: preset not found: " ++ name).warn; ^this };
 
-		model.setCarrier(snap[\carrier] ?? { model.carrier });
-		model.setRatio(snap[\ratio]     ?? { model.ratio });
-		model.setIndex(snap[\index]     ?? { model.index });
-		model.setTilt(snap[\tilt]       ?? { model.tilt });
+		// Set model parameters directly — avoids per-setter recompute/push
+		if(snap[\carrier].notNil) { model.carrier = snap[\carrier].asFloat.max(0.1) };
+		if(snap[\ratio].notNil)   { model.ratio   = snap[\ratio].asFloat.clip(0.125, 8.0) };
+		if(snap[\index].notNil)   { model.index   = snap[\index].asFloat.clip(0.0, 10.0) };
+		if(snap[\tilt].notNil)    { model.tilt    = snap[\tilt].asFloat.clip(-1.0, 1.0) };
+		model.compute;
 
-		if(snap[\levels].notNil)       { synth.setPartialParam(\levels,       snap[\levels]) };
+		// Apply per-partial state — non-level params can go before refresh
 		if(snap[\pans].notNil)         { synth.setPartialParam(\pans,         snap[\pans]) };
 		if(snap[\phase].notNil)        { synth.setPartialParam(\phase,        snap[\phase]) };
 		if(snap[\amRate].notNil)       { synth.setPartialParam(\amRate,       snap[\amRate]) };
@@ -227,13 +227,25 @@ KassiaController {
 		if(snap[\fmDepthCents].notNil) { synth.setPartialParam(\fmDepthCents, snap[\fmDepthCents]) };
 
 		synth.set(\root, model.carrier);
+
+		// Refresh first (which pushes ratios + model amps to levels),
+		// THEN override levels from preset so they survive.
 		this.refreshPartials;
+		if(snap[\levels].notNil) {
+			synth.setPartialParam(\levels, snap[\levels]);
+			this.notify(\partials, model.absFreqs, snap[\levels]);
+		};
+
 		this.notify(\presetLoaded, name);
 	}
 
 	deletePreset { |name|
 		presetBank.delete(name);
-		if(bankPath.notNil) { presetBank.writeToFile(bankPath) };
+		if(bankPath.notNil and: { presetBank.size > 0 }) {
+			presetBank.writeToFile(bankPath);
+		} {
+			if(presetBank.size == 0) { bankPath = nil };
+		};
 		this.notify(\presets, presetBank.names);
 	}
 

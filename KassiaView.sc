@@ -31,7 +31,7 @@ KassiaView {
 	var freqNb, freqPitchTxt;
 	var levelSl, levelNb;
 
-	var uiFont, dark, stripBg, txtCol, lvlCol, panCol, amCol, fmCol;
+	var uiFont, dark, stripBg, txtCol, lvlCol, ctrlCol, fmCol;
 
 	*new { |controller, window|
 		^super.new.init(controller, window)
@@ -46,9 +46,8 @@ KassiaView {
 		stripBg = Color.grey(0.82);
 		txtCol  = Color.black;
 		lvlCol  = Color.grey(0.93);
-		panCol  = Color.grey(0.80);
-		amCol   = Color.grey(0.80);
-		fmCol   = Color.grey(0.80);
+		ctrlCol = Color.grey(0.80);   // shared by pan/am/fm controls
+		fmCol   = Color.grey(0.80);   // FM-specific controls (kept for future divergence)
 
 		this.prRegisterListeners;
 		this.buildUI;
@@ -61,6 +60,33 @@ KassiaView {
 	// ------------------------------------------------------------------
 
 	prRegisterListeners {
+
+		ctrl.addListener(\refresh, { |carrier, ratio, index, tilt, modHz, absFreqs, amps|
+			{
+				if(carrierNb.notNil)       { carrierNb.value = carrier };
+				if(carrierPitchTxt.notNil) { carrierPitchTxt.string = PitchView.hzToPitchString(carrier, 0.1) };
+				if(ratioNb.notNil)         { ratioNb.value = ratio.round(0.001) };
+				if(ratioSl.notNil)         { ratioSl.value = ratio.explin(0.125, 8.0, 0, 1) };
+				if(indexNb.notNil)         { indexNb.value = index.round(0.001) };
+				if(indexSl.notNil)         { indexSl.value = index.linlin(0.0, 10.0, 0, 1) };
+				if(modHzNb.notNil)         { modHzNb.value = modHz.round(0.001) };
+				if(modPitchTxt.notNil)     { modPitchTxt.string = PitchView.hzToPitchString(modHz, 0.1) };
+				ctrl.synth.num.do { |i|
+					if(freqNb.notNil and: { freqNb[i].notNil }) {
+						freqNb[i].value = absFreqs[i].round(0.001);
+					};
+					if(freqPitchTxt.notNil and: { freqPitchTxt[i].notNil }) {
+						freqPitchTxt[i].string = PitchView.hzToPitchString(absFreqs[i], 0.1);
+					};
+					if(levelSl.notNil and: { levelSl[i].notNil }) {
+						levelSl[i].value = amps[i];
+					};
+					if(levelNb.notNil and: { levelNb[i].notNil }) {
+						levelNb[i].value = amps[i].round(0.001);
+					};
+				};
+			}.defer;
+		});
 
 		ctrl.addListener(\carrier, { |hz|
 			{ if(carrierNb.notNil)       { carrierNb.value = hz };
@@ -294,10 +320,11 @@ KassiaView {
 			slRect: Rect(525, 12, 220, 16),
 			nbRect: Rect(750, 8, 82, 22),
 			initVal: 1200,
-			bg: panCol,
+			bg: ctrlCol,
 			toSlider: { |v| v.explin(20, 20000, 0, 1) },
 			fromSlider: { |v| v.linexp(0, 1, 20, 20000) },
-			action: { |v| ctrl.set(\vcfFreq, v) }
+			action: { |v| ctrl.set(\vcfFreq, v) },
+			decimals: 0
 		);
 
 		StaticText(top, Rect(845, 10, 40, 20))
@@ -306,10 +333,11 @@ KassiaView {
 			slRect: Rect(875, 12, 110, 16),
 			nbRect: Rect(990, 8, 68, 22),
 			initVal: 0.35,
-			bg: panCol,
+			bg: ctrlCol,
 			toSlider: { |v| v.linlin(0.05, 0.95, 0, 1) },
 			fromSlider: { |v| v.linlin(0, 1, 0.05, 0.95) },
-			action: { |v| ctrl.set(\vcfRQ, v) }
+			action: { |v| ctrl.set(\vcfRQ, v) },
+			decimals: 2
 		);
 
 		Button(top, Rect(1048, 8, 100, 22))
@@ -397,17 +425,18 @@ KassiaView {
 			slRect: Rect(60, 84, 140, 16),
 			nbRect: Rect(205, 80, 70, 22),
 			initVal: 1.0,
-			bg: panCol,
+			bg: ctrlCol,
 			toSlider: { |v| v.explin(0.25, 8.0, 0, 1) },
 			fromSlider: { |v| v.linexp(0, 1, 0.25, 8.0) },
-			action: { |v| ctrl.set(\drive, v) }
+			action: { |v| ctrl.set(\drive, v) },
+			decimals: 2
 		);
 
 		StaticText(top, Rect(290, 82, 70, 20))
 			.string_("vMix").stringColor_(txtCol).font_(uiFont);
 		this.prMakeSlider(top, Rect(330, 84, 120, 16),
 			val: 0.35.linexp(0.001, 1.0, 0, 1),
-			bg: amCol,
+			bg: ctrlCol,
 			action: { |v| ctrl.set(\vowelMix, v.linexp(0, 1, 0.001, 1.0)) }
 		);
 
@@ -415,7 +444,7 @@ KassiaView {
 			.string_("vPos").stringColor_(txtCol).font_(uiFont);
 		this.prMakeSlider(top, Rect(510, 84, 120, 16),
 			val: 1.5 / 4,
-			bg: amCol,
+			bg: ctrlCol,
 			action: { |v| ctrl.set(\vowelPos, v * 4) }
 		);
 
@@ -424,7 +453,7 @@ KassiaView {
 			.string_("vRQ").stringColor_(txtCol).font_(uiFont);
 		this.prMakeSlider(top, Rect(685, 84, 120, 16),
 			val: 1.0.linlin(0.5, 3.0, 0, 1),
-			bg: amCol,
+			bg: ctrlCol,
 			action: { |v| ctrl.set(\vowelRQ, v.linlin(0, 1, 0.5, 3.0)) }
 		);
 
@@ -434,10 +463,11 @@ KassiaView {
 			slRect: Rect(875, 84, 100, 16),
 			nbRect: Rect(978, 80, 58, 22),
 			initVal: 0.03,
-			bg: panCol,
+			bg: ctrlCol,
 			toSlider: { |v| v.explin(0.0001, 2.0, 0, 1) },
 			fromSlider: { |v| v.linexp(0, 1, 0.0001, 2.0) },
-			action: { |v| ctrl.set(\filterModRate, v) }
+			action: { |v| ctrl.set(\filterModRate, v) },
+			decimals: 3
 		);
 
 		StaticText(top, Rect(1040, 82, 50, 20))
@@ -446,10 +476,11 @@ KassiaView {
 			slRect: Rect(1090, 84, 80, 16),
 			nbRect: Rect(1174, 80, 56, 22),
 			initVal: 0.0,
-			bg: panCol,
+			bg: ctrlCol,
 			toSlider: { |v| v },
 			fromSlider: { |v| v.clip(0, 0.99) },
-			action: { |v| ctrl.set(\filterModDepth, v) }
+			action: { |v| ctrl.set(\filterModDepth, v) },
+			decimals: 2
 		);
 	}
 
@@ -518,7 +549,7 @@ KassiaView {
 			.string_("pan").stringColor_(txtCol).font_(uiFont);
 		this.prMakeSlider(strip, Rect(34, 72, 118, 16),
 			val: 0.5,
-			bg: panCol,
+			bg: ctrlCol,
 			action: { |v|
 				ctrl.setPartialParamAt(\pans, i, v.linlin(0, 1, -1, 1));
 			}
@@ -533,7 +564,8 @@ KassiaView {
 			bg: fmCol,
 			toSlider: { |v| v.linlin(0, 60, 0, 1) },
 			fromSlider: { |v| v.linlin(0, 1, 0, 60) },
-			action: { |v| ctrl.setPartialParamAt(\fmDepthCents, i, v) }
+			action: { |v| ctrl.setPartialParamAt(\fmDepthCents, i, v) },
+			decimals: 1
 		);
 
 		StaticText(strip, Rect(34, 134, 60, 14))
@@ -542,10 +574,11 @@ KassiaView {
 			slRect: Rect(34, 148, 58, 16),
 			nbRect: Rect(96, 146, 60, 20),
 			initVal: 0.05,
-			bg: amCol,
+			bg: ctrlCol,
 			toSlider: { |v| v.explin(0.0001, 2.0, 0, 1) },
 			fromSlider: { |v| v.linexp(0, 1, 0.0001, 2.0) },
-			action: { |v| ctrl.setPartialParamAt(\amRate, i, v) }
+			action: { |v| ctrl.setPartialParamAt(\amRate, i, v) },
+			decimals: 3
 		);
 
 		StaticText(strip, Rect(34, 172, 60, 14))
@@ -554,10 +587,11 @@ KassiaView {
 			slRect: Rect(34, 186, 58, 16),
 			nbRect: Rect(96, 184, 60, 20),
 			initVal: 0.2,
-			bg: amCol,
+			bg: ctrlCol,
 			toSlider: { |v| v },
 			fromSlider: { |v| v.clip(0, 1) },
-			action: { |v| ctrl.setPartialParamAt(\amDepth, i, v) }
+			action: { |v| ctrl.setPartialParamAt(\amDepth, i, v) },
+			decimals: 2
 		);
 
 		StaticText(strip, Rect(34, 210, 60, 14))
@@ -569,7 +603,8 @@ KassiaView {
 			bg: fmCol,
 			toSlider: { |v| v.explin(0.0001, 2.0, 0, 1) },
 			fromSlider: { |v| v.linexp(0, 1, 0.0001, 2.0) },
-			action: { |v| ctrl.setPartialParamAt(\fmRate, i, v) }
+			action: { |v| ctrl.setPartialParamAt(\fmRate, i, v) },
+			decimals: 3
 		);
 	}
 
@@ -593,28 +628,29 @@ KassiaView {
 	// toSlider:   converts domain value -> slider 0–1 position
 	// fromSlider: converts slider 0–1 position -> domain value
 	// action:     called with the domain value whenever either widget changes
+	// decimals:   numberbox decimals (default 3)
 	prMakeSliderNb { |parent, slRect, nbRect, initVal, bg,
-	                  toSlider, fromSlider, action|
-		var sl, nb;
+	                  toSlider, fromSlider, action, decimals=3|
+		var sl, nb, step;
+
+		step = (10 ** decimals.neg);
 
 		sl = Slider(parent, slRect)
 			.value_(toSlider.(initVal))
 			.background_(bg);
 
 		nb = NumberBox(parent, nbRect)
-			.decimals_(3).step_(0.001)
+			.decimals_(decimals).step_(step)
 			.value_(initVal);
 
 		sl.action_({ |s|
-			var v;
-			v = fromSlider.(s.value);
-			nb.value = v.round(0.001);
+			var v = fromSlider.(s.value);
+			nb.value = v.round(step);
 			action.(v);
 		});
 
 		nb.action_({ |n|
-			var v;
-			v = n.value;
+			var v = n.value;
 			sl.value = toSlider.(v);
 			action.(v);
 		});

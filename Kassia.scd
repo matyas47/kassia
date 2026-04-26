@@ -1,5 +1,5 @@
 // Kassia.scd
-// Launcher for Kassia v0.2
+// Launcher for Kassia v0.5
 //
 // Boots the server if needed, then creates the model, synth,
 // controller, and view in the correct order.

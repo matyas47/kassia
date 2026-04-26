@@ -57,11 +57,13 @@ KassiaSynth {
 			masterLag=0.5, vcfLag=1.5, vcfRQLag=1.0, driveLag=1.0,
 			partLevelLag=2.0, panLag=1.0, fmDepthLag=2.0,
 			amRateLag=2.0, amDepthLag=2.0, fmRateLag=2.0,
+			ratioLag=0.5, detuneLag=0.5,
 			drive=1.0, drivePost=1.0,
 			filterModRate=0.03, filterModDepth=0.0
 			|
 
 			var ratios, detuneCents, levels, pans, phase, amRate, amDepth, fmRate, fmDepthCents;
+			var ratiosSm, detuneSm;
 			var env, vcfLFO, vcfCut, baseF, fm, f, ph, osc, am, per, sig;
 			var vmix, vpos, vrq, mstr, vcfFreqSm, vcfRQSm, driveSm;
 			var levelsSm, pansSm, fmDepthSm, amRateSm, amDepthSm, fmRateSm;
@@ -88,11 +90,13 @@ KassiaSynth {
 			amRateSm  = Lag.kr(amRate.clip(0.0001, 2.0), amRateLag.max(0.001));
 			amDepthSm = Lag.kr(amDepth.clip(0.0, 1.0),   amDepthLag.max(0.001));
 			fmRateSm  = Lag.kr(fmRate.clip(0.0001, 2.0), fmRateLag.max(0.001));
+			ratiosSm  = Lag.kr(ratios,                    ratioLag.max(0.001));
+			detuneSm  = Lag.kr(detuneCents,               detuneLag.max(0.001));
 
 			vcfLFO = SinOsc.kr(filterModRate).range(-1, 1);
 			vcfCut = (vcfFreqSm * (vcfLFO * filterModDepth + 1)).clip(20, 20000);
 
-			baseF = (root * ratios * (detuneCents / 100).midiratio).clip(0.1, 20000);
+			baseF = (root * ratiosSm * (detuneSm / 100).midiratio).clip(0.1, 20000);
 			fm    = SinOsc.kr(fmRateSm.max(0.000001)).bipolar(fmDepthSm / 100).midiratio;
 			f     = (baseF * fm).clip(0.1, 20000);
 
@@ -134,19 +138,29 @@ KassiaSynth {
 
 	play { |server, root=55, master=0.12|
 		server = server ? Server.default;
-		node = Synth(defName, [\root, root, \master, 0.0], server);
-		this.prPushAll;
-		SystemClock.sched(0.05, { node.set(\master, master); nil });
+		// Start with all state pre-loaded as Synth args — no post-creation push needed.
+		// The 2s ASR attack envelope handles the smooth onset.
+		node = Synth(defName, [
+			\root,        root,
+			\master,      master,
+			\ratios,      state[\ratios],
+			\detuneCents, state[\detuneCents],
+			\levels,      state[\levels],
+			\pans,        state[\pans],
+			\phase,       state[\phase],
+			\amRate,      state[\amRate],
+			\amDepth,     state[\amDepth],
+			\fmRate,      state[\fmRate],
+			\fmDepthCents, state[\fmDepthCents]
+		], server);
 		^node
 	}
 
 	free {
 		var n = node;
 		node = nil;
-		if(n.notNil) {
-			n.set(\master, 0.0);
-			n.set(\gate, 0);
-		};
+		// gate=0 triggers the env release; doneAction:2 frees the node
+		if(n.notNil) { n.set(\gate, 0) };
 	}
 
 	// ------------------------------------------------------------------
